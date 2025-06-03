@@ -1,5 +1,5 @@
 import random
-from typing import Dict, List
+from typing import Dict
 
 
 class Player:
@@ -12,6 +12,9 @@ class Player:
 
     def remove_amount(self, money: int) -> None:
         self.amount -= money
+
+    def update_amount(self, amount):
+        self.amount = amount
 
 
 class PlayerClass:
@@ -48,22 +51,6 @@ class PlayerClass:
     def return_players(self):
         return [self.players[i] for i in range(self.noof_players)]
 
-# class Round:
-#     def __init__(self, dealer: int):
-#         self.highest_bid = 0
-#         self.active_players: Dict[int, List] = {}
-#         # this dictionary contains player bid, and player visited status
-#         self.current_dealer: int = dealer
-#
-#     def next_current_dealer(self) -> None:
-#         while True:
-#             self.current_dealer = (self.current_dealer + 1) % len(self.active_players.keys())
-#             if self.current_dealer in self.active_players:
-#                 break
-#
-#             if len(self.active_players.keys()) == 1:
-#                 self.current_dealer = next(iter(self.active_players.keys()))
-#                 break
 
 class RoundPlayer:
     def __init__(self, idx, name, amount):
@@ -118,24 +105,25 @@ class Street:
                 self.round_all(i+2)
                 self.reset_round_data()
                 self.print_players()
-        self.update_score()
+        return self.update_score()
 
     def round_one(self):
         self.current_hand = (self.dealer + 2) % len(self.game_players)
         for i in range(len(self.game_players)):
-            print(f" Round 1 Player {self.current_hand + 1}  |")
-            option = self.get_choice(self.game_players[self.current_hand].bid_amount > self.current_highest_bid)
-            if option == 1:
-                self.game_players[self.current_hand].set_active_status(False)
-            elif option == 2:
-                self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
-            else:
-                raise_amount = int(input(f"Enter raise amount for player {self.current_hand + 1}: "))
-                # raise_amount checks will be introduced later
-                self.current_highest_bid = raise_amount
-                self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
-            self.game_players[self.current_hand].set_visited_status(True)
-            self.current_hand = (self.current_hand + 1) % len(self.game_players)
+            if self.game_players[self.current_hand].is_active:
+                print(f" Round 1 Player {self.current_hand + 1}  |")
+                option = self.get_choice(self.game_players[self.current_hand].bid_amount > self.current_highest_bid)
+                if option == 1:
+                    self.game_players[self.current_hand].set_active_status(False)
+                elif option == 2:
+                    self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
+                else:
+                    raise_amount = int(input(f"Enter raise amount for player {self.current_hand + 1}: "))
+                    # raise_amount checks will be introduced later
+                    self.current_highest_bid = raise_amount
+                    self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
+                self.game_players[self.current_hand].set_visited_status(True)
+                self.current_hand = (self.current_hand + 1) % len(self.game_players)
 
     def reset_round_data(self):
         temp = 0
@@ -150,21 +138,25 @@ class Street:
     def round_all(self, round_number):
         self.current_hand = self.dealer
         for i in range(len(self.game_players)):
-            print(f"Round {round_number} Player {self.current_hand + 1} ---|")
-            option = self.get_choice(self.game_players[self.current_hand].bid_amount > self.current_highest_bid)
-            if option == 1:
-                self.game_players[self.current_hand].set_active_status(False)
-            elif option == 2:
-                self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
-            else:
-                raise_amount = int(input(f"Enter raise amount for player {self.current_hand + 1}: "))
-                # raise_amount checks will be introduced later
-                self.current_highest_bid = raise_amount
-                self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
-            self.game_players[self.current_hand].set_visited_status(True)
-            self.current_hand = (self.current_hand + 1) % len(self.game_players)
+            if self.game_players[self.current_hand].is_active:
+                print(f"Round {round_number} Player {self.current_hand + 1} ---|")
+                option = self.get_choice(self.game_players[self.current_hand].bid_amount > self.current_highest_bid)
+                if option == 1:
+                    self.game_players[self.current_hand].set_active_status(False)
+                elif option == 2:
+                    self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
+                else:
+                    raise_amount = int(input(f"Enter raise amount for player {self.current_hand + 1}: "))
+                    # raise_amount checks will be introduced later
+                    self.current_highest_bid = raise_amount
+                    self.game_players[self.current_hand].set_bid_amount(self.current_highest_bid)
+                self.game_players[self.current_hand].set_visited_status(True)
+                self.current_hand = (self.current_hand + 1) % len(self.game_players)
 
-        bids = [i.bid_amount for i in self.game_players]
+        bids = []
+        for i in self.game_players:
+            if i.is_active:
+                bids.append(i.bid_amount)
         if len(set(bids)) > 1:
             self.round_all(round_number)
 
@@ -172,6 +164,8 @@ class Street:
         winner = int(input("Enter winner id: "))
         if winner in range(len(self.game_players)):
             self.game_players[winner].set_amount(self.pot_amount)
+
+        return [i.available_amount for i in self.game_players]
 
     @staticmethod
     def get_choice(has_raise):
@@ -187,10 +181,11 @@ class Street:
 
 class Game:
 
-    @staticmethod
-    def start_game():
-        print("Do you want to start a new game with new players(Something(YES)/Nothing(NO)):")
-        if input():
+    def __init__(self):
+        self.dealer = 0
+
+    def start_game(self, decision):
+        if not decision:
             n = int(input("Enter number of players you wanna play with : "))
             poker = PlayerClass(n)
             poker.initialize_players()
@@ -211,15 +206,18 @@ class Game:
                     poker.display_players()
                     continue
 
-                street = Street(0)
+                street = Street(self.dealer)
                 street.get_game_players(poker.return_players())
                 # street.print_players()
-                street.river()
+                updated_amounts = street.river()
+                for i in range(len(updated_amounts)):
+                    poker.players[i].update_amount(updated_amounts[i])
                 print("Round Done. Enter to continue playing or something else to exit.")
                 if not input():
                     return
-                break
-
+                self.dealer = (self.dealer + 1) % poker.noof_players
 
 if __name__ == "__main__":
     game = Game()
+    print("Welcome to poker offline(Something(Exit)/Nothing(Continue)):")
+    game.start_game(input())
